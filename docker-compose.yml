@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  notifier:
+    build: .
+    container_name: uparcel_notifier
+    env_file:
+      - .env
+    volumes:
+      - ./attachments:/app/attachments
+    command: ["python", "main.py"]
