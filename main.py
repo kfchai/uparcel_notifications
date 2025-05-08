@@ -101,7 +101,11 @@ folder_id = find_folder_id(USER_EMAIL, FOLDER_PATH)
 # Find today's email with matching subject
 # ----------------------------
 
-messages_url = f"https://graph.microsoft.com/v1.0/users/{USER_EMAIL}/mailFolders/{folder_id}/messages?$orderby=receivedDateTime desc&$top=10"
+#messages_url = f"https://graph.microsoft.com/v1.0/users/{USER_EMAIL}/mailFolders/{folder_id}/messages?$orderby=receivedDateTime desc&$top=10"
+messages_url = (
+    f"https://graph.microsoft.com/v1.0/users/{USER_EMAIL}/mailFolders/{folder_id}/messages"
+    f"?$filter=isRead eq false&$orderby=receivedDateTime desc&$top=10"
+)
 response = requests.get(messages_url, headers=headers)
 response.raise_for_status()
 messages = response.json().get('value', [])
@@ -146,6 +150,13 @@ for att in attachments:
 
 if not attachment_path:
     raise Exception("No Excel attachment found in the email.")
+
+mark_read_url = f"https://graph.microsoft.com/v1.0/users/{USER_EMAIL}/messages/{message_id}"
+mark_read_payload = {
+    "isRead": True
+}
+mark_resp = requests.patch(mark_read_url, headers=headers, json=mark_read_payload)
+mark_resp.raise_for_status()
 
 # ----------------------------
 # Send WhatsApp message using Meta API
