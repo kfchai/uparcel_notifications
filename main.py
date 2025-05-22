@@ -20,7 +20,7 @@ CLIENT_ID = os.getenv('CLIENT_ID')
 CLIENT_SECRET = os.getenv('CLIENT_SECRET')
 USER_EMAIL = os.getenv('USER_EMAIL')
 TESTMODE = os.getenv('TESTMODE')
-
+ADMIN_PHONE = os.getenv('ADMIN_PHONE')
 WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
 PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
 WHATSAPP_API_URL = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
@@ -168,7 +168,7 @@ def send_whatsapp_message(to_number: str, name: str, delivery_time: str, order_n
         'Content-Type': 'application/json'
     }
     if TESTMODE == '1':
-        to_number = 97101155
+        to_number = ADMIN_PHONE
         
     payload = {
         "messaging_product": "whatsapp",
@@ -192,6 +192,43 @@ def send_whatsapp_message(to_number: str, name: str, delivery_time: str, order_n
 
     response = requests.post(WHATSAPP_API_URL, headers=headers, json=payload)
     print(f"Sent to {to_number}: {response.status_code} - {response.text}")
+    return response.json()
+
+
+# ----------------------------
+# Send WhatsApp Reminder Report To Admin
+# ----------------------------
+
+def send_whatsapp_report(to_number: str, report: list):
+    headers = {
+        'Authorization': f'Bearer {WHATSAPP_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+        
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "template",
+        "template": {
+            "name": "messages_report",  # This must match your approved template
+            "language": { "code": "en" },
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        { "type": "text", "text": "Uparcel Reminder" },
+                        { "type": "text", "text": report['total'] },
+                        { "type": "text", "text": report['success'] },
+                        { "type": "text", "text": report['failed'] }
+                    ]
+                }
+            ]
+        }
+    }
+
+    response = requests.post(WHATSAPP_API_URL, headers=headers, json=payload)
+    print(f"Sent to {to_number}: {response.status_code} - {response.text}")
+    return response.json()
 
 # ----------------------------
 # Process Excel and send messages
@@ -199,11 +236,31 @@ def send_whatsapp_message(to_number: str, name: str, delivery_time: str, order_n
 
 df = pd.read_csv(attachment_path)
 
+wa_report = {
+    "success": 0,
+    "failed": 0,
+    "total": 0
+}
+
 for _, row in df.iterrows():
+    wa_report['total'] += 1
     name = str(row.get('delivery_contact_person', 'Customer'))
     phone = str(row.get('delivery_contact_number', '')).replace(' ', '')
     delivery_time = str(row.get('delivery_time', 'today'))
     order_num = str(row.get('reference_number','NA'))
     print("Sending WhatsApp Message {0} {1} {2} {3}".format(name, phone, delivery_time, order_num))
     if phone:
-       send_whatsapp_message(phone, name, delivery_time, order_num)
+        wa_resp = send_whatsapp_message(phone, name, delivery_time, order_num)
+        if wa_resp and len(wa_resp['messages']) > 0:
+            if wa_resp['messages'][0]['message_status'] == "accepted":
+               wa_report['success'] += 1
+            else:
+               wa_report['failed'] += 1
+        else:
+           wa_report['failed'] += 1
+    else:
+        wa_report['failed'] += 1
+
+
+#sending report
+send_whatsapp_report(ADMIN_PHONE, wa_report)
